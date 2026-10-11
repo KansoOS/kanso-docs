@@ -9,10 +9,79 @@
 > **Enveloppe de réponse** (confirmée sur instance réelle le 2026-10-12) : toutes les réponses
 > sont enveloppées dans `{ "data": <payload>, "success": true, "status": <code> }`.
 > Le payload utile est toujours sous la clé `data`. La doc initiale ne documentait pas cette enveloppe.
+> Les réponses sont maintenant validées avec zod : toute divergence produit une erreur lisible
+> qui nomme la route et le champ manquant.
 >
 > **Pagination** : les endpoints paginés utilisent une pagination par curseur :
 > `{ "limit": N, "hasNextPage": bool, "hasPrevPage": bool, "nextCursor": str|null, "prevCursor": str|null }`.
 > Il n'y a **pas** de champ `totalItems` ni `totalPages`.
+
+### Forme complète des réponses (observée sur instance réelle)
+
+#### `POST /api/spaces/` — corps réel
+```json
+{
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "name": "General",
+        "slug": "general",
+        "description": "",
+        "logo": null,
+        "visibility": "private",
+        "defaultRole": "writer",
+        "creatorId": "uuid",
+        "workspaceId": "uuid",
+        "createdAt": "2026-10-11T21:49:16.853Z",
+        "updatedAt": "2026-10-11T21:49:16.853Z",
+        "deletedAt": null,
+        "settings": null,
+        "isPersonal": false,
+        "memberCount": 1,
+        "membership": { "userId": "uuid", "role": "admin" }
+      }
+    ],
+    "meta": {
+      "limit": 100,
+      "hasNextPage": false,
+      "hasPrevPage": false,
+      "nextCursor": null,
+      "prevCursor": null
+    }
+  },
+  "success": true,
+  "status": 200
+}
+```
+
+#### `POST /api/search` — corps réel (résultats vides)
+```json
+{
+  "data": { "items": [] },
+  "success": true,
+  "status": 200
+}
+```
+> Note : `meta` est absent quand `items` est vide. Le schéma zod le déclare optionnel.
+
+#### `POST /api/pages/sidebar-pages` — corps réel (espace vide)
+```json
+{
+  "data": {
+    "items": [],
+    "meta": {
+      "limit": 50,
+      "hasNextPage": false,
+      "hasPrevPage": false,
+      "nextCursor": null,
+      "prevCursor": null
+    }
+  },
+  "success": true,
+  "status": 200
+}
+```
 
 ---
 

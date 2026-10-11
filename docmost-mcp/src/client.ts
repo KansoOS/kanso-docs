@@ -1,144 +1,173 @@
+import { z } from 'zod';
 import { getToken, login, invalidateToken } from './auth.js';
 
 const DEBUG = process.env.DOCMOST_DEBUG === '1';
 
 function debugLog(method: string, url: string, status: number, rawBody: string) {
   if (!DEBUG) return;
-  // Expurge tout token/cookie de l'URL avant de logger
   const safeUrl = url.replace(/authToken=[^&;]*/g, 'authToken=[REDACTED]');
-  const preview = rawBody.slice(0, 500);
   process.stderr.write(
-    `[docmost-mcp:debug] ${method} ${safeUrl} → ${status}\n  body: ${preview}\n`,
+    `[docmost-mcp:debug] ${method} ${safeUrl} → ${status}\n  body: ${rawBody.slice(0, 500)}\n`,
   );
 }
 
-async function apiPost<T>(path: string, body: unknown): Promise<T> {
+// ─── Transport ────────────────────────────────────────────────────────────────
+
+async function apiPostRaw(path: string, body: unknown): Promise<{ status: number; text: string }> {
   const token = await getToken();
   const url = `${process.env.DOCMOST_URL}/api${path}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: `authToken=${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const doFetch = (tok: string) =>
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: `authToken=${tok}` },
+      body: JSON.stringify(body),
+    });
 
-  const rawText = await res.text();
+  let res = await doFetch(token);
+  let rawText = await res.text();
   debugLog('POST', url, res.status, rawText);
 
   if (res.status === 401) {
     invalidateToken();
-    const freshToken = await login();
-    const retry = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: `authToken=${freshToken}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    const retryText = await retry.text();
-    debugLog('POST(retry)', url, retry.status, retryText);
-
-    if (!retry.ok) {
-      throw new Error(
-        `POST ${path} failed after token refresh [${retry.status}]: ${retryText.slice(0, 200)}`,
-      );
-    }
-    return JSON.parse(retryText) as T;
+    const fresh = await login();
+    res = await doFetch(fresh);
+    rawText = await res.text();
+    debugLog('POST(retry)', url, res.status, rawText);
   }
 
   if (!res.ok) {
     throw new Error(`POST ${path} [${res.status}]: ${rawText.slice(0, 200)}`);
   }
 
-  return JSON.parse(rawText) as T;
+  return { status: res.status, text: rawText };
 }
 
-// Toutes les réponses Docmost sont enveloppées : { data: T, success: boolean, status: number }
-interface Envelope<T> { data: T; success: boolean; status: number }
+// ─── Zod schemas (forme réelle observée le 2026-10-12) ───────────────────────
 
-async function apiPostUnwrapped<T>(path: string, body: unknown): Promise<T> {
-  const envelope = await apiPost<Envelope<T>>(path, body);
-  if (!envelope || typeof envelope !== 'object' || !('data' in envelope)) {
-    throw new Error(`POST ${path}: réponse inattendue (enveloppe 'data' manquante) : ${JSON.stringify(envelope).slice(0, 200)}`);
+const zCursorMeta = z.object({
+  limit: z.number(),
+  hasNextPage: z.boolean(),
+  hasPrevPage: z.boolean(),
+  nextCursor: z.string().nullable(),
+  prevCursor: z.string().nullable(),
+}).optional();
+
+const zSpaceItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable().optional(),
+  membership: z.object({ role: z.string() }).optional(),
+});
+
+const zSpacesData = z.object({
+  items: z.array(zSpaceItem),
+  meta: zCursorMeta,
+});
+
+const zPageItem = z.object({
+  id: z.string(),
+  title: z.string().nullable().optional(),
+  slugId: z.string(),
+  spaceId: z.string(),
+  parentPageId: z.string().nullable().optional(),
+  hasChildren: z.boolean().optional(),
+  updatedAt: z.string().optional(),
+});
+
+const zPagesData = z.object({
+  items: z.array(zPageItem),
+  meta: zCursorMeta,
+});
+
+const zSearchItem = z.object({
+  id: z.string(),
+  title: z.string().nullable().optional(),
+  slugId: z.string(),
+  spaceId: z.string(),
+  excerpt: z.string().nullable().optional(),
+  space: z.object({ name: z.string(), slug: z.string() }).optional(),
+});
+
+const zSearchData = z.object({
+  items: z.array(zSearchItem),
+  meta: zCursorMeta,
+});
+
+const zPageDetail = z.object({
+  id: z.string(),
+  title: z.string().nullable().optional(),
+  slugId: z.string(),
+  spaceId: z.string(),
+  parentPageId: z.string().nullable().optional(),
+  content: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  space: z.object({ id: z.string(), name: z.string(), slug: z.string() }).optional(),
+});
+
+// L'enveloppe universelle : { data: T, success: boolean, status: number }
+function zEnvelope<T extends z.ZodTypeAny>(dataSchema: T) {
+  return z.object({ data: dataSchema, success: z.boolean().optional(), status: z.number().optional() });
+}
+
+// Parse + erreur lisible qui nomme la route et le champ manquant
+function parseOrThrow<T>(schema: z.ZodType<T>, raw: string, path: string): T {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`POST ${path}: réponse non-JSON : ${raw.slice(0, 200)}`);
   }
-  return envelope.data;
+
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `${i.path.join('.')}: ${i.message}`)
+      .join('; ');
+    throw new Error(`POST ${path}: forme de réponse inattendue — ${issues} — brut: ${raw.slice(0, 200)}`);
+  }
+  return result.data;
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types exportés ───────────────────────────────────────────────────────────
 
-export interface SpaceItem {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  membership?: { role: string };
-}
-
-// Pagination curseur (pas totalItems)
-export interface CursorMeta {
-  limit: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-  nextCursor: string | null;
-  prevCursor: string | null;
-}
+export type SpaceItem = z.infer<typeof zSpaceItem>;
+export type PageItem = z.infer<typeof zPageItem>;
+export type PageDetail = z.infer<typeof zPageDetail>;
+export type SearchResultItem = z.infer<typeof zSearchItem>;
 
 export interface PaginatedResponse<T> {
   items: T[];
-  meta?: CursorMeta;
-}
-
-export interface PageItem {
-  id: string;
-  title?: string | null;
-  slugId: string;
-  spaceId: string;
-  parentPageId?: string | null;
-  hasChildren?: boolean;
-  updatedAt?: string;
-}
-
-export interface PageDetail extends PageItem {
-  content?: string | null;
-  createdAt?: string;
-  space?: { id: string; name: string; slug: string };
-}
-
-export interface SearchResultItem {
-  id: string;
-  title?: string | null;
-  slugId: string;
-  spaceId: string;
-  excerpt?: string | null;
-  space?: { name: string; slug: string };
+  meta?: z.infer<typeof zCursorMeta>;
 }
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
-export function fetchSpaces(): Promise<PaginatedResponse<SpaceItem>> {
-  return apiPostUnwrapped('/spaces/', { limit: 100 });
+export async function fetchSpaces(): Promise<PaginatedResponse<SpaceItem>> {
+  const { text } = await apiPostRaw('/spaces/', { limit: 100 });
+  return parseOrThrow(zEnvelope(zSpacesData), text, '/spaces/').data;
 }
 
-export function fetchSidebarPages(
+export async function fetchSidebarPages(
   spaceId: string,
   limit = 100,
 ): Promise<PaginatedResponse<PageItem>> {
-  return apiPostUnwrapped('/pages/sidebar-pages', { spaceId, limit });
+  const { text } = await apiPostRaw('/pages/sidebar-pages', { spaceId, limit });
+  return parseOrThrow(zEnvelope(zPagesData), text, '/pages/sidebar-pages').data;
 }
 
-export function fetchPageInfo(pageId: string): Promise<PageDetail> {
-  return apiPostUnwrapped('/pages/info', { pageId, format: 'markdown' });
+export async function fetchPageInfo(pageId: string): Promise<PageDetail> {
+  const { text } = await apiPostRaw('/pages/info', { pageId, format: 'markdown' });
+  return parseOrThrow(zEnvelope(zPageDetail), text, '/pages/info').data;
 }
 
-export function fetchSearch(
+export async function fetchSearch(
   query: string,
   spaceId?: string,
   limit = 10,
 ): Promise<PaginatedResponse<SearchResultItem>> {
-  return apiPostUnwrapped('/search', { query, ...(spaceId ? { spaceId } : {}), limit, offset: 0 });
+  const { text } = await apiPostRaw('/search', { query, ...(spaceId ? { spaceId } : {}), limit, offset: 0 });
+  return parseOrThrow(zEnvelope(zSearchData), text, '/search').data;
 }

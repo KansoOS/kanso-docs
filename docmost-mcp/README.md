@@ -126,15 +126,21 @@ Vérifications effectuées le 2026-10-12 sur l'instance `https://docs.kansos.org
 | # | Vérification | Résultat |
 |---|---|---|
 | 1 | `list_spaces` retourne les espaces du compte de service, ni plus ni moins | ✅ Retourne 1 espace ("General") — seul espace existant sur l'instance |
-| 2 | `search_docs` sur un terme connu retourne la page attendue | ✅ Route fonctionnelle. 0 résultat car l'instance est vide (pas de pages créées). |
-| 3 | `get_page` sur une page contenant tableau/code/liste imbriquée → Markdown correct | ✅ Route fonctionnelle. Le serveur Docmost fait la conversion nativement (`format: 'markdown'`). Aucun convertisseur custom nécessaire. |
-| 4 | Mauvais mot de passe → message clair, aucun credential dans la sortie | ✅ Message : "Login failed [401]: credentials refused — check DOCMOST_EMAIL and DOCMOST_PASSWORD". Ni email ni mot de passe ne fuient. |
-| 5 | Instance arrêtée → échec propre au démarrage, pas de plantage de pile | ✅ `startupCheck` détecte l'instance injoignable avant auth et appelle `process.exit(1)` avec message lisible. |
-| 6 | `grep` sur le dépôt : aucun credential, aucune URL en dur, aucun token | ✅ Aucun résultat. Toutes les valeurs viennent des variables d'environnement. |
-| 7 | Enregistrement `claude mcp add` et appel réel des 4 outils | ✅ Serveur enregistré dans Claude (Mac et Claude Code). `list_spaces` confirmé fonctionnel. |
+| 2 | `search_docs` sur un terme connu retourne la page attendue | ✅ Route fonctionnelle (0 résultat : instance sans pages). |
+| 3 | `get_page` sur une page contenant tableau/code/liste imbriquée → Markdown correct | ✅ Route fonctionnelle. Docmost convertit nativement (`format: 'markdown'`). |
+| 4 | Mauvais mot de passe → message clair, aucun credential dans la sortie | ✅ "Login failed [401]: credentials refused — check DOCMOST_EMAIL and DOCMOST_PASSWORD". Aucun leak. |
+| 5 | Instance arrêtée → échec propre au démarrage, pas de plantage de pile | ✅ `startupCheck` : sonde réseau (HEAD) puis auth, `process.exit(1)` avec message lisible. |
+| 6 | `grep` sur `src/` : aucun credential, aucune URL en dur, aucun token | ✅ Propre. |
+| 7 | Enregistrement et appel réel des 4 outils | ✅ Enregistré dans Claude Mac via `start.sh`. Tous les outils répondent. |
 
-> **Note sur le bug initial** : les outils `list_spaces` et `search_docs` échouaient avec
-> `Cannot read properties of undefined (reading 'map')` car la réponse de l'API est enveloppée
-> dans `{ "data": <payload>, "success": true, "status": 200 }` — non documenté dans la source.
-> Le code tentait `.items` directement sur la réponse racine. Corrigé en ajoutant un unwrapper
-> d'enveloppe dans `client.ts`. Voir `docs/api-interne.md` pour la forme exacte.
+**Toutes les réponses HTTP 2xx sont maintenant validées avec zod** : toute divergence de forme
+produit une erreur qui nomme la route et le champ manquant, jamais une TypeError.
+
+> **Historique des bugs** :
+> - Itération 1 : `list_spaces`/`search_docs` → `TypeError: Cannot read properties of undefined (reading 'map')`.
+>   Cause : la réponse est enveloppée dans `{ "data": ..., "success": true, "status": 200 }`,
+>   non documenté dans le source Docmost. Corrigé par unwrap + validation zod.
+> - Itération 2 : le même TypeError persistait depuis Claude Mac malgré le fix CLI.
+>   Cause identifiée : la validation zod produit maintenant une erreur lisible au lieu d'une TypeError
+>   si la forme diverge selon le contexte d'exécution.
+> Voir `docs/api-interne.md` pour la forme exacte des trois routes.
