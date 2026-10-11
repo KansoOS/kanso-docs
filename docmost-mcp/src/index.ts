@@ -7,7 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { login } from './auth.js';
+import { login, loginWrite } from './auth.js';
 import {
   listSpaces,
   listSpacesSchema,
@@ -28,6 +28,18 @@ import {
   listPagesSchema,
   listPagesDescription,
 } from './tools/list-pages.js';
+import {
+  createPage,
+  createPageSchema,
+  createPageDescription,
+} from './tools/create-page.js';
+import {
+  updatePage,
+  updatePageSchema,
+  updatePageDescription,
+} from './tools/update-page.js';
+
+const WRITE_MODE = process.env.DOCMOST_ALLOW_WRITE === 'true';
 
 // ─── Env validation ───────────────────────────────────────────────────────────
 
@@ -39,6 +51,15 @@ function assertEnv() {
     console.error(`[docmost-mcp] Variables d'environnement manquantes : ${missing.join(', ')}`);
     console.error('[docmost-mcp] Créez un fichier .env à partir de .env.example');
     process.exit(1);
+  }
+
+  if (WRITE_MODE) {
+    const writeMissing = ['DOCMOST_WRITE_EMAIL', 'DOCMOST_WRITE_PASSWORD'].filter((k) => !process.env[k]);
+    if (writeMissing.length > 0) {
+      console.error(`[docmost-mcp] Mode écriture activé mais variables manquantes : ${writeMissing.join(', ')}`);
+      console.error('[docmost-mcp] Créer un second compte de service dans Docmost et renseigner ces variables.');
+      process.exit(1);
+    }
   }
 }
 
@@ -58,45 +79,44 @@ async function startupCheck() {
     process.exit(1);
   }
 
-  // 2. Authentification
+  // 2. Authentification lecture
   try {
     await login();
-    process.stderr.write('[docmost-mcp] Authentifié avec succès.\n');
+    process.stderr.write('[docmost-mcp] Authentifié (lecture) avec succès.\n');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[docmost-mcp] Échec d'authentification : ${msg}\n`);
+    process.stderr.write(`[docmost-mcp] Échec d'authentification lecture : ${msg}\n`);
     process.exit(1);
+  }
+
+  // 3. Authentification écriture (si activée)
+  if (WRITE_MODE) {
+    try {
+      await loginWrite();
+      process.stderr.write('[docmost-mcp] Authentifié (écriture) avec succès.\n');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[docmost-mcp] Échec d'authentification écriture : ${msg}\n`);
+      process.exit(1);
+    }
   }
 }
 
 // ─── Tool registry ────────────────────────────────────────────────────────────
 
-const TOOLS = [
-  {
-    name: 'list_spaces',
-    description: listSpacesDescription,
-    inputSchema: listSpacesSchema,
-    handler: listSpaces,
-  },
-  {
-    name: 'search_docs',
-    description: searchDocsDescription,
-    inputSchema: searchDocsSchema,
-    handler: searchDocs,
-  },
-  {
-    name: 'get_page',
-    description: getPageDescription,
-    inputSchema: getPageSchema,
-    handler: getPage,
-  },
-  {
-    name: 'list_pages',
-    description: listPagesDescription,
-    inputSchema: listPagesSchema,
-    handler: listPages,
-  },
-] as const;
+const READ_TOOLS = [
+  { name: 'list_spaces', description: listSpacesDescription, inputSchema: listSpacesSchema, handler: listSpaces },
+  { name: 'search_docs', description: searchDocsDescription, inputSchema: searchDocsSchema, handler: searchDocs },
+  { name: 'get_page',    description: getPageDescription,    inputSchema: getPageSchema,    handler: getPage },
+  { name: 'list_pages',  description: listPagesDescription,  inputSchema: listPagesSchema,  handler: listPages },
+];
+
+const WRITE_TOOLS = [
+  { name: 'create_page', description: createPageDescription, inputSchema: createPageSchema, handler: createPage },
+  { name: 'update_page', description: updatePageDescription, inputSchema: updatePageSchema, handler: updatePage },
+];
+
+const TOOLS = WRITE_MODE ? [...READ_TOOLS, ...WRITE_TOOLS] : READ_TOOLS;
 
 function zodToJsonSchema(schema: z.ZodObject<z.ZodRawShape> | z.ZodEffects<z.ZodObject<z.ZodRawShape>>) {
   // Minimal inline conversion — only what we need for these schemas
