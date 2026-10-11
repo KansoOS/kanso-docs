@@ -191,7 +191,10 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write('[docmost-mcp] Serveur MCP démarré (stdio).\n');
+
+  const toolNames = TOOLS.map((t) => t.name).join(', ');
+  process.stderr.write(`[docmost-mcp] Serveur MCP démarré (stdio). Mode écriture : ${WRITE_MODE ? 'OUI' : 'NON'}.\n`);
+  process.stderr.write(`[docmost-mcp] Outils enregistrés (${TOOLS.length}) : ${toolNames}\n`);
 }
 
 main();
