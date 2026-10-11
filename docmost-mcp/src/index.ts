@@ -28,6 +28,18 @@ import {
   listPagesSchema,
   listPagesDescription,
 } from './tools/list-pages.js';
+import {
+  createPage,
+  createPageSchema,
+  createPageDescription,
+} from './tools/create-page.js';
+import {
+  updatePage,
+  updatePageSchema,
+  updatePageDescription,
+} from './tools/update-page.js';
+
+const WRITE_MODE = process.env.DOCMOST_ALLOW_WRITE === 'true';
 
 // ─── Env validation ───────────────────────────────────────────────────────────
 
@@ -40,6 +52,7 @@ function assertEnv() {
     console.error('[docmost-mcp] Créez un fichier .env à partir de .env.example');
     process.exit(1);
   }
+
 }
 
 // ─── Startup check ────────────────────────────────────────────────────────────
@@ -58,45 +71,33 @@ async function startupCheck() {
     process.exit(1);
   }
 
-  // 2. Authentification
+  // 2. Authentification lecture
   try {
     await login();
-    process.stderr.write('[docmost-mcp] Authentifié avec succès.\n');
+    process.stderr.write('[docmost-mcp] Authentifié (lecture) avec succès.\n');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[docmost-mcp] Échec d'authentification : ${msg}\n`);
+    process.stderr.write(`[docmost-mcp] Échec d'authentification lecture : ${msg}\n`);
     process.exit(1);
   }
+
 }
 
 // ─── Tool registry ────────────────────────────────────────────────────────────
 
-const TOOLS = [
-  {
-    name: 'list_spaces',
-    description: listSpacesDescription,
-    inputSchema: listSpacesSchema,
-    handler: listSpaces,
-  },
-  {
-    name: 'search_docs',
-    description: searchDocsDescription,
-    inputSchema: searchDocsSchema,
-    handler: searchDocs,
-  },
-  {
-    name: 'get_page',
-    description: getPageDescription,
-    inputSchema: getPageSchema,
-    handler: getPage,
-  },
-  {
-    name: 'list_pages',
-    description: listPagesDescription,
-    inputSchema: listPagesSchema,
-    handler: listPages,
-  },
-] as const;
+const READ_TOOLS = [
+  { name: 'list_spaces', description: listSpacesDescription, inputSchema: listSpacesSchema, handler: listSpaces },
+  { name: 'search_docs', description: searchDocsDescription, inputSchema: searchDocsSchema, handler: searchDocs },
+  { name: 'get_page',    description: getPageDescription,    inputSchema: getPageSchema,    handler: getPage },
+  { name: 'list_pages',  description: listPagesDescription,  inputSchema: listPagesSchema,  handler: listPages },
+];
+
+const WRITE_TOOLS = [
+  { name: 'create_page', description: createPageDescription, inputSchema: createPageSchema, handler: createPage },
+  { name: 'update_page', description: updatePageDescription, inputSchema: updatePageSchema, handler: updatePage },
+];
+
+const TOOLS = WRITE_MODE ? [...READ_TOOLS, ...WRITE_TOOLS] : READ_TOOLS;
 
 function zodToJsonSchema(schema: z.ZodObject<z.ZodRawShape> | z.ZodEffects<z.ZodObject<z.ZodRawShape>>) {
   // Minimal inline conversion — only what we need for these schemas
@@ -118,6 +119,7 @@ function zodToJsonSchema(schema: z.ZodObject<z.ZodRawShape> | z.ZodEffects<z.Zod
       const defaultInner = inner._def.innerType;
       if (defaultInner instanceof z.ZodNumber) { prop['type'] = 'number'; prop['default'] = inner._def.defaultValue(); }
       else if (defaultInner instanceof z.ZodString) { prop['type'] = 'string'; prop['default'] = inner._def.defaultValue(); }
+      else if (defaultInner instanceof z.ZodEnum) { prop['type'] = 'string'; prop['enum'] = defaultInner._def.values; prop['default'] = inner._def.defaultValue(); }
       else prop['type'] = 'unknown';
     } else prop['type'] = 'object';
 
@@ -171,7 +173,10 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write('[docmost-mcp] Serveur MCP démarré (stdio).\n');
+
+  const toolNames = TOOLS.map((t) => t.name).join(', ');
+  process.stderr.write(`[docmost-mcp] Serveur MCP démarré (stdio). Mode écriture : ${WRITE_MODE ? 'OUI' : 'NON'}.\n`);
+  process.stderr.write(`[docmost-mcp] Outils enregistrés (${TOOLS.length}) : ${toolNames}\n`);
 }
 
 main();

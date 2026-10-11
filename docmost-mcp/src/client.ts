@@ -174,3 +174,64 @@ export async function fetchSearch(
   const { text } = await apiPostRaw('/search', { query, ...(spaceId ? { spaceId } : {}), limit, offset: 0 });
   return parseOrThrow(zEnvelope(zSearchData), text, '/search').data;
 }
+
+// ─── Write API ────────────────────────────────────────────────────────────────
+
+const zCreatedPage = z.object({
+  id: z.string(),
+  slugId: z.string(),
+  title: z.string().nullable().optional(),
+  spaceId: z.string(),
+  parentPageId: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export type CreatedPage = z.infer<typeof zCreatedPage>;
+
+export async function createDocmostPage(
+  spaceId: string,
+  title: string,
+  markdown: string,
+  parentPageId?: string,
+): Promise<CreatedPage> {
+  // 1. Créer la page (titre + espace, sans contenu)
+  const { text: createText } = await apiPostRaw('/pages/create', {
+    spaceId,
+    title,
+    ...(parentPageId ? { parentPageId } : {}),
+  });
+  const page = parseOrThrow(zEnvelope(zCreatedPage), createText, '/pages/create').data;
+
+  // 2. Injecter le contenu — rollback si ça échoue (évite de laisser une page vide)
+  if (markdown.trim()) {
+    try {
+      await apiPostRaw('/pages/update', {
+        pageId: page.id,
+        title,
+        content: markdown,
+        operation: 'replace',
+        format: 'markdown',
+      });
+    } catch (err) {
+      await apiPostRaw('/pages/delete', { pageId: page.id }).catch(() => {});
+      throw err;
+    }
+  }
+
+  return page;
+}
+
+export async function updateDocmostPage(
+  pageId: string,
+  operation: 'replace' | 'append' | 'prepend',
+  title?: string,
+  markdown?: string,
+): Promise<CreatedPage> {
+  const body: Record<string, unknown> = { pageId, operation, format: 'markdown' };
+  if (title !== undefined) body.title = title;
+  if (markdown !== undefined) body.content = markdown;
+
+  const { text } = await apiPostRaw('/pages/update', body);
+  return parseOrThrow(zEnvelope(zCreatedPage), text, '/pages/update').data;
+}

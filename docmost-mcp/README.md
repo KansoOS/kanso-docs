@@ -109,13 +109,54 @@ Liste les pages d'un espace avec leur arborescence (parent/enfant).
 
 ---
 
-## Évolution V2 — Écriture (non implémentée)
+## Outils d'écriture (V2)
 
-Les opérations d'écriture (`create_page`, `update_page`, `create_comment`) ne sont pas dans le périmètre initial.  
-Si elles sont ajoutées un jour :
-- Utiliser un second compte distinct avec les droits nécessaires
-- Activer explicitement via `DOCMOST_ALLOW_WRITE=true`
-- Ne déployer qu'après que la V1 est stable et utilisée en production
+### Activation
+
+Les outils `create_page` et `update_page` sont **désactivés par défaut**. Pour les activer :
+
+```env
+DOCMOST_ALLOW_WRITE=true
+DOCMOST_WRITE_EMAIL=mcp-write@kansos.org
+DOCMOST_WRITE_PASSWORD=mot_de_passe_du_compte_ecriture
+```
+
+Sans `DOCMOST_ALLOW_WRITE=true`, ces outils n'apparaissent pas dans la liste et ne peuvent pas être appelés.
+
+### Contrainte 1 — Compte utilisé pour l'écriture
+
+Les outils d'écriture utilisent le même compte que la lecture (`DOCMOST_EMAIL` / `DOCMOST_PASSWORD`). Ce compte doit avoir les droits **Writer** (ou **Admin**) sur les espaces concernés.
+
+Pour un déploiement multi-utilisateurs, remplacer par un compte de service dédié avec les droits appropriés.
+
+### Contrainte 2 — Verrouillage optimiste sur `update_page`
+
+`update_page` requiert le champ `updated_at` retourné par `get_page`. Avant d'écrire, le serveur relit l'état actuel de la page et compare les deux valeurs. Si elles diffèrent (quelqu'un d'autre a modifié la page entre la lecture et l'écriture), la requête est **refusée** avec un message d'erreur explicite.
+
+Flux correct :
+1. `get_page` → récupère le contenu et `updated_at`
+2. Modifier le contenu localement
+3. `update_page` avec `updated_at` obtenu en étape 1
+
+### Outil `create_page`
+
+Crée une nouvelle page dans un espace.
+
+**Paramètres** :
+- `space_slug` (requis) — slug de l'espace cible
+- `title` (requis) — titre de la page
+- `content` (optionnel) — contenu Markdown (titres, listes, blocs de code, gras/italique)
+- `parent_page_id` (optionnel) — UUID de la page parente (crée à la racine si absent)
+
+### Outil `update_page`
+
+Met à jour une page existante.
+
+**Paramètres** :
+- `page_id` (requis) — UUID ou slugId de la page
+- `updated_at` (requis) — valeur `updated_at` issue de `get_page` (verrouillage optimiste)
+- `title` (optionnel) — nouveau titre
+- `content` (optionnel) — nouveau contenu Markdown
 
 ---
 
