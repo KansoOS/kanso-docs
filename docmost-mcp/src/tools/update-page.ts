@@ -16,10 +16,14 @@ export const updatePageSchema = z.object({
     .string()
     .optional()
     .describe('Nouveau contenu en Markdown (optionnel — conserve l\'ancien si absent)'),
+  operation: z
+    .enum(['replace', 'append', 'prepend'])
+    .default('replace')
+    .describe('replace : remplace tout le contenu (défaut) ; append : ajoute à la fin ; prepend : ajoute au début'),
 });
 
 export const updatePageDescription = `Met à jour le titre et/ou le contenu d'une page Docmost.
-Nécessite DOCMOST_ALLOW_WRITE=true et un compte de service en écriture distinct.
+Nécessite DOCMOST_ALLOW_WRITE=true.
 Requiert updated_at (obtenu via get_page) : refuse si la page a été modifiée depuis la lecture (verrouillage optimiste).
 Passer uniquement les champs à modifier — les autres sont conservés.`;
 
@@ -40,7 +44,7 @@ export async function updatePage(args: z.infer<typeof updatePageSchema>) {
     };
   }
 
-  const updated = await updateDocmostPage(args.page_id, args.title, args.content);
+  const updated = await updateDocmostPage(args.page_id, args.operation, args.title, args.content);
 
   return {
     content: [{

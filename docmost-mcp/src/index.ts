@@ -119,6 +119,7 @@ function zodToJsonSchema(schema: z.ZodObject<z.ZodRawShape> | z.ZodEffects<z.Zod
       const defaultInner = inner._def.innerType;
       if (defaultInner instanceof z.ZodNumber) { prop['type'] = 'number'; prop['default'] = inner._def.defaultValue(); }
       else if (defaultInner instanceof z.ZodString) { prop['type'] = 'string'; prop['default'] = inner._def.defaultValue(); }
+      else if (defaultInner instanceof z.ZodEnum) { prop['type'] = 'string'; prop['enum'] = defaultInner._def.values; prop['default'] = inner._def.defaultValue(); }
       else prop['type'] = 'unknown';
     } else prop['type'] = 'object';
 

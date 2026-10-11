@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { getToken, login, invalidateToken, getWriteToken, loginWrite, invalidateWriteToken } from './auth.js';
-import { markdownToProseMirror } from './prosemirror.js';
+import { getToken, login, invalidateToken } from './auth.js';
 
 const DEBUG = process.env.DOCMOST_DEBUG === '1';
 
@@ -176,34 +175,7 @@ export async function fetchSearch(
   return parseOrThrow(zEnvelope(zSearchData), text, '/search').data;
 }
 
-// ─── Write API (compte séparé DOCMOST_WRITE_EMAIL) ───────────────────────────
-
-async function apiPostWrite(path: string, body: unknown): Promise<{ status: number; text: string }> {
-  const url = `${process.env.DOCMOST_URL}/api${path}`;
-
-  const doFetch = (tok: string) =>
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: `authToken=${tok}` },
-      body: JSON.stringify(body),
-    });
-
-  let tok = await getWriteToken();
-  let res = await doFetch(tok);
-  let rawText = await res.text();
-  debugLog('POST(write)', url, res.status, rawText);
-
-  if (res.status === 401) {
-    invalidateWriteToken();
-    tok = await loginWrite();
-    res = await doFetch(tok);
-    rawText = await res.text();
-    debugLog('POST(write-retry)', url, res.status, rawText);
-  }
-
-  if (!res.ok) throw new Error(`POST ${path} [${res.status}]: ${rawText.slice(0, 200)}`);
-  return { status: res.status, text: rawText };
-}
+// ─── Write API ────────────────────────────────────────────────────────────────
 
 const zCreatedPage = z.object({
   id: z.string(),
@@ -223,18 +195,28 @@ export async function createDocmostPage(
   markdown: string,
   parentPageId?: string,
 ): Promise<CreatedPage> {
-  // 1. Créer la page (titre + espace)
-  const { text: createText } = await apiPostWrite('/pages/create', {
+  // 1. Créer la page (titre + espace, sans contenu)
+  const { text: createText } = await apiPostRaw('/pages/create', {
     spaceId,
     title,
     ...(parentPageId ? { parentPageId } : {}),
   });
   const page = parseOrThrow(zEnvelope(zCreatedPage), createText, '/pages/create').data;
 
-  // 2. Injecter le contenu si fourni
+  // 2. Injecter le contenu — rollback si ça échoue (évite de laisser une page vide)
   if (markdown.trim()) {
-    const content = markdownToProseMirror(markdown);
-    await apiPostWrite('/pages/update', { pageId: page.id, title, content });
+    try {
+      await apiPostRaw('/pages/update', {
+        pageId: page.id,
+        title,
+        content: markdown,
+        operation: 'replace',
+        format: 'markdown',
+      });
+    } catch (err) {
+      await apiPostRaw('/pages/delete', { pageId: page.id }).catch(() => {});
+      throw err;
+    }
   }
 
   return page;
@@ -242,13 +224,14 @@ export async function createDocmostPage(
 
 export async function updateDocmostPage(
   pageId: string,
+  operation: 'replace' | 'append' | 'prepend',
   title?: string,
   markdown?: string,
 ): Promise<CreatedPage> {
-  const body: Record<string, unknown> = { pageId };
+  const body: Record<string, unknown> = { pageId, operation, format: 'markdown' };
   if (title !== undefined) body.title = title;
-  if (markdown !== undefined) body.content = markdownToProseMirror(markdown);
+  if (markdown !== undefined) body.content = markdown;
 
-  const { text } = await apiPostWrite('/pages/update', body);
+  const { text } = await apiPostRaw('/pages/update', body);
   return parseOrThrow(zEnvelope(zCreatedPage), text, '/pages/update').data;
 }

@@ -276,13 +276,71 @@ Retourne l'arborescence des pages d'un espace (pagination).
 
 ---
 
+---
+
+## Écriture (V2)
+
+### `POST /api/pages/create`
+
+**Corps de la requête** :
+```json
+{ "spaceId": "<uuid>", "title": "Titre", "parentPageId": "<uuid|null>" }
+```
+
+**Réponse succès** : HTTP 201 — objet page sans contenu :
+```json
+{ "data": { "id": "<uuid>", "slugId": "<short>", "title": "Titre", "spaceId": "<uuid>", "parentPageId": null, "createdAt": "…", "updatedAt": "…" }, "success": true, "status": 201 }
+```
+
+> Le contenu n'est pas accepté à la création — l'injecter via `/pages/update` immédiatement après.
+> Si l'update échoue, appeler `/pages/delete` pour rollback (sinon la page vide reste dans le wiki).
+
+---
+
+### `POST /api/pages/update`
+
+**Corps de la requête** :
+```json
+{
+  "pageId": "<uuid>",
+  "title": "Nouveau titre",
+  "content": "# Titre\n\nContenu Markdown...",
+  "operation": "replace",
+  "format": "markdown"
+}
+```
+
+**Champs requis** : `pageId`, `operation`, `format`.  
+**Champs optionnels** : `title`, `content`.
+
+| Champ | Valeurs acceptées | Description |
+|---|---|---|
+| `operation` | `replace` \| `append` \| `prepend` | Mode d'écriture du contenu |
+| `format` | `json` \| `markdown` \| `html` | Format du champ `content` — `markdown` : Docmost convertit en ProseMirror côté serveur |
+
+> **Note** : `format: "markdown"` permet d'envoyer du Markdown brut, le serveur fait la conversion vers ProseMirror. Pas besoin de convertisseur côté client.
+
+**Réponse succès** : HTTP 200 — même forme que `/pages/create`.
+
+---
+
+### `POST /api/pages/delete`
+
+**Corps de la requête** :
+```json
+{ "pageId": "<uuid>" }
+```
+
+**Réponse succès** : HTTP 200.  
+Utilisé en rollback si `/pages/update` échoue après une création.
+
+---
+
 ## Routes hors périmètre (non implémentées, documentées pour info)
 
 | Route | Source | Usage potentiel |
 |---|---|---|
 | `POST /api/pages/export` | `integrations/export/export.controller.ts` | Export Markdown/HTML/ZIP (retourne binaire) |
-| `POST /api/pages/create` | `core/page/page.controller.ts` | Création de page (V2) |
-| `POST /api/pages/update` | `core/page/page.controller.ts` | Mise à jour de page (V2) |
 | `POST /api/auth/logout` | `core/auth/auth.controller.ts` | Déconnexion |
 
 ---
