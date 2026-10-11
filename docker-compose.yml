@@ -1,22 +1,10 @@
 services:
-  traefik:
-    image: traefik:v3.2
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-    environment:
-      DOCKER_API_VERSION: "1.44"
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     restart: unless-stopped
     depends_on:
-      - traefik
+      - docmost
 
   docmost:
     image: docmost/docmost:latest
@@ -26,23 +14,18 @@ services:
     environment:
       APP_URL: ${APP_URL}
       APP_SECRET: ${APP_SECRET}
-      DATABASE_URL: 'postgresql://docmost:STRONG_DB_PASSWORD@db:5432/docmost'
+      DATABASE_URL: 'postgresql://docmost:${DB_PASSWORD}@db:5432/docmost'
       REDIS_URL: 'redis://redis:6379'
     restart: unless-stopped
     volumes:
       - docmost:/app/data/storage
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.docmost.rule=Host(`${DOCS_HOST}`)
-      - traefik.http.routers.docmost.entrypoints=web
-      - traefik.http.services.docmost.loadbalancer.server.port=3000
 
   db:
     image: postgres:18
     environment:
       POSTGRES_DB: docmost
       POSTGRES_USER: docmost
-      POSTGRES_PASSWORD: STRONG_DB_PASSWORD
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     restart: unless-stopped
     volumes:
       - db_data:/var/lib/postgresql
