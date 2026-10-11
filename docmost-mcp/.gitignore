@@ -1,0 +1,5 @@
+.env
+*.token
+*.cookie
+node_modules/
+dist/
