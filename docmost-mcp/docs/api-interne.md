@@ -5,6 +5,14 @@
 > Toutes les routes utilisent le préfixe `/api/`.
 > Toutes les routes (sauf login) exigent un cookie `authToken` (JWT httpOnly).
 > Docmost utilise largement `POST` même pour des lectures — aucun `GET` n'est utilisé dans cette API.
+>
+> **Enveloppe de réponse** (confirmée sur instance réelle le 2026-10-12) : toutes les réponses
+> sont enveloppées dans `{ "data": <payload>, "success": true, "status": <code> }`.
+> Le payload utile est toujours sous la clé `data`. La doc initiale ne documentait pas cette enveloppe.
+>
+> **Pagination** : les endpoints paginés utilisent une pagination par curseur :
+> `{ "limit": N, "hasNextPage": bool, "hasPrevPage": bool, "nextCursor": str|null, "prevCursor": str|null }`.
+> Il n'y a **pas** de champ `totalItems` ni `totalPages`.
 
 ---
 

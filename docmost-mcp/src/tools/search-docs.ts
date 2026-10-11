@@ -37,7 +37,7 @@ export async function searchDocs(args: z.infer<typeof searchDocsSchema>) {
   const text =
     items.length === 0
       ? `Aucun résultat pour la requête "${args.query}".`
-      : JSON.stringify({ query: args.query, total: result.meta.totalItems, results: items }, null, 2);
+      : JSON.stringify({ query: args.query, total: items.length, results: items }, null, 2);
 
   return { content: [{ type: 'text' as const, text }] };
 }

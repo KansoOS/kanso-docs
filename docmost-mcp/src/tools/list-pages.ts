@@ -31,7 +31,7 @@ export async function listPages(args: z.infer<typeof listPagesSchema>) {
   }));
 
   const text = JSON.stringify(
-    { space_id: args.space_id, total: result.meta.totalItems, pages },
+    { space_id: args.space_id, total: pages.length, pages },
     null,
     2,
   );

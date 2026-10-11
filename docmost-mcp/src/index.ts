@@ -45,13 +45,26 @@ function assertEnv() {
 // ─── Startup check ────────────────────────────────────────────────────────────
 
 async function startupCheck() {
-  process.stderr.write('[docmost-mcp] Vérification de la connexion…\n');
+  const url = process.env.DOCMOST_URL!;
+  process.stderr.write(`[docmost-mcp] Vérification connectivité → ${url}\n`);
+
+  // 1. Connectivité réseau (HEAD sur la racine)
+  try {
+    const probe = await fetch(url, { method: 'HEAD' });
+    process.stderr.write(`[docmost-mcp] Instance joignable (HTTP ${probe.status}).\n`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[docmost-mcp] Instance injoignable (${url}) : ${msg}\n`);
+    process.exit(1);
+  }
+
+  // 2. Authentification
   try {
     await login();
     process.stderr.write('[docmost-mcp] Authentifié avec succès.\n');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[docmost-mcp] Échec au démarrage : ${msg}\n`);
+    process.stderr.write(`[docmost-mcp] Échec d'authentification : ${msg}\n`);
     process.exit(1);
   }
 }

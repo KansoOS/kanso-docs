@@ -20,7 +20,7 @@ export async function listSpaces(_args: z.infer<typeof listSpacesSchema>) {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify({ spaces, total: result.meta.totalItems }, null, 2),
+        text: JSON.stringify({ spaces, total: spaces.length }, null, 2),
       },
     ],
   };

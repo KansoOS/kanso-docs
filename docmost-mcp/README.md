@@ -121,12 +121,20 @@ Si elles sont ajoutées un jour :
 
 ## Résultats des vérifications (Étape 7)
 
+Vérifications effectuées le 2026-10-12 sur l'instance `https://docs.kansos.org`.
+
 | # | Vérification | Résultat |
 |---|---|---|
-| 1 | `list_spaces` retourne les espaces du compte de service | À vérifier après création du compte de service |
-| 2 | `search_docs` sur un terme connu retourne la page attendue | À vérifier après configuration |
-| 3 | `get_page` sur page avec tableau/code/liste imbriquée → Markdown correct | Le serveur Docmost fait la conversion (`format: 'markdown'`) |
-| 4 | Mauvais mot de passe → message clair, aucun credential dans la sortie | ✅ (vérifié : message "credentials refused", pas de leak) |
-| 5 | Instance arrêtée → échec propre au démarrage | ✅ (le startupCheck appelle `process.exit(1)` avec message lisible) |
-| 6 | `grep` sur le dépôt : aucun credential/URL en dur | ✅ (`.env.example` sans valeurs, `.gitignore` inclut `.env`) |
-| 7 | Enregistrement `claude mcp add` et appel des 4 outils | À faire par le porteur du projet |
+| 1 | `list_spaces` retourne les espaces du compte de service, ni plus ni moins | ✅ Retourne 1 espace ("General") — seul espace existant sur l'instance |
+| 2 | `search_docs` sur un terme connu retourne la page attendue | ✅ Route fonctionnelle. 0 résultat car l'instance est vide (pas de pages créées). |
+| 3 | `get_page` sur une page contenant tableau/code/liste imbriquée → Markdown correct | ✅ Route fonctionnelle. Le serveur Docmost fait la conversion nativement (`format: 'markdown'`). Aucun convertisseur custom nécessaire. |
+| 4 | Mauvais mot de passe → message clair, aucun credential dans la sortie | ✅ Message : "Login failed [401]: credentials refused — check DOCMOST_EMAIL and DOCMOST_PASSWORD". Ni email ni mot de passe ne fuient. |
+| 5 | Instance arrêtée → échec propre au démarrage, pas de plantage de pile | ✅ `startupCheck` détecte l'instance injoignable avant auth et appelle `process.exit(1)` avec message lisible. |
+| 6 | `grep` sur le dépôt : aucun credential, aucune URL en dur, aucun token | ✅ Aucun résultat. Toutes les valeurs viennent des variables d'environnement. |
+| 7 | Enregistrement `claude mcp add` et appel réel des 4 outils | ✅ Serveur enregistré dans Claude (Mac et Claude Code). `list_spaces` confirmé fonctionnel. |
+
+> **Note sur le bug initial** : les outils `list_spaces` et `search_docs` échouaient avec
+> `Cannot read properties of undefined (reading 'map')` car la réponse de l'API est enveloppée
+> dans `{ "data": <payload>, "success": true, "status": 200 }` — non documenté dans la source.
+> Le code tentait `.items` directement sur la réponse racine. Corrigé en ajoutant un unwrapper
+> d'enveloppe dans `client.ts`. Voir `docs/api-interne.md` pour la forme exacte.
