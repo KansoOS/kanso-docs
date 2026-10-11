@@ -55,15 +55,36 @@
 }
 ```
 
-#### `POST /api/search` — corps réel (résultats vides)
+#### `POST /api/search` — corps réel (avec résultats)
 ```json
 {
-  "data": { "items": [] },
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "slugId": "c1bzfey8PO",
+        "title": "Pitchs introduction",
+        "icon": null,
+        "parentPageId": null,
+        "creatorId": "uuid",
+        "createdAt": "2026-10-11T22:24:03.839Z",
+        "updatedAt": "2026-10-11T22:25:37.175Z",
+        "rank": 4.494,
+        "highlight": "faire une démarche <b>en</b> ligne…",
+        "space": { "id": "uuid", "name": "Documents Epitech", "slug": "epitech" },
+        "wholeWord": true,
+        "matchedText": ["en", "En", "est"]
+      }
+    ]
+  },
   "success": true,
   "status": 200
 }
 ```
-> Note : `meta` est absent quand `items` est vide. Le schéma zod le déclare optionnel.
+> **Champs notables** :
+> - `spaceId` est **absent** de l'item — l'id de l'espace est dans `space.id`
+> - Le résumé du contenu s'appelle `highlight` (HTML avec balises `<b>`), pas `excerpt`
+> - `meta` est absent quand `items` est vide — le schéma zod le déclare optionnel
 
 #### `POST /api/pages/sidebar-pages` — corps réel (espace vide)
 ```json

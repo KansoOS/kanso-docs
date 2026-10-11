@@ -125,8 +125,8 @@ Vérifications effectuées le 2026-10-12 sur l'instance `https://docs.kansos.org
 
 | # | Vérification | Résultat |
 |---|---|---|
-| 1 | `list_spaces` retourne les espaces du compte de service, ni plus ni moins | ✅ Retourne 1 espace ("General") — seul espace existant sur l'instance |
-| 2 | `search_docs` sur un terme connu retourne la page attendue | ✅ Route fonctionnelle (0 résultat : instance sans pages). |
+| 1 | `list_spaces` retourne les espaces du compte de service, ni plus ni moins | ✅ Retourne 2 espaces ("Documentation KansOS", "Documents Epitech") |
+| 2 | `search_docs` sur un terme connu retourne la page attendue | ✅ Retourne "Pitchs introduction" pour la query "e", avec `highlight` HTML. |
 | 3 | `get_page` sur une page contenant tableau/code/liste imbriquée → Markdown correct | ✅ Route fonctionnelle. Docmost convertit nativement (`format: 'markdown'`). |
 | 4 | Mauvais mot de passe → message clair, aucun credential dans la sortie | ✅ "Login failed [401]: credentials refused — check DOCMOST_EMAIL and DOCMOST_PASSWORD". Aucun leak. |
 | 5 | Instance arrêtée → échec propre au démarrage, pas de plantage de pile | ✅ `startupCheck` : sonde réseau (HEAD) puis auth, `process.exit(1)` avec message lisible. |

@@ -31,7 +31,7 @@ export async function searchDocs(args: z.infer<typeof searchDocsSchema>) {
     slug_id: item.slugId,
     title: item.title ?? '(sans titre)',
     space: item.space ? { name: item.space.name, slug: item.space.slug } : null,
-    excerpt: item.excerpt ?? null,
+    excerpt: item.highlight ?? null,
   }));
 
   const text =

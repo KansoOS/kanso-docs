@@ -83,11 +83,14 @@ const zPagesData = z.object({
 
 const zSearchItem = z.object({
   id: z.string(),
-  title: z.string().nullable().optional(),
   slugId: z.string(),
-  spaceId: z.string(),
-  excerpt: z.string().nullable().optional(),
-  space: z.object({ name: z.string(), slug: z.string() }).optional(),
+  title: z.string().nullable().optional(),
+  // spaceId absent de la réponse search — l'id d'espace est dans space.id
+  highlight: z.string().nullable().optional(),
+  rank: z.number().optional(),
+  space: z.object({ id: z.string().optional(), name: z.string(), slug: z.string() }).optional(),
+  wholeWord: z.boolean().optional(),
+  matchedText: z.array(z.string()).optional(),
 });
 
 const zSearchData = z.object({
