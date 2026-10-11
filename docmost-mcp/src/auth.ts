@@ -42,25 +42,7 @@ export function invalidateToken(): void {
   cachedToken = null;
 }
 
-// ─── Write account (DOCMOST_WRITE_EMAIL / DOCMOST_WRITE_PASSWORD) ────────────
-
-let cachedWriteToken: string | null = null;
-
-export async function loginWrite(): Promise<string> {
-  const email = process.env.DOCMOST_WRITE_EMAIL;
-  const password = process.env.DOCMOST_WRITE_PASSWORD;
-  if (!email || !password) {
-    throw new Error('Missing required env vars: DOCMOST_WRITE_EMAIL, DOCMOST_WRITE_PASSWORD');
-  }
-  cachedWriteToken = await doLogin(email, password, 'DOCMOST_WRITE_EMAIL and DOCMOST_WRITE_PASSWORD');
-  return cachedWriteToken;
-}
-
-export async function getWriteToken(): Promise<string> {
-  if (cachedWriteToken) return cachedWriteToken;
-  return loginWrite();
-}
-
-export function invalidateWriteToken(): void {
-  cachedWriteToken = null;
-}
+// Écriture : même compte que la lecture
+export const getWriteToken = getToken;
+export const loginWrite = login;
+export const invalidateWriteToken = invalidateToken;

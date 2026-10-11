@@ -123,16 +123,11 @@ DOCMOST_WRITE_PASSWORD=mot_de_passe_du_compte_ecriture
 
 Sans `DOCMOST_ALLOW_WRITE=true`, ces outils n'apparaissent pas dans la liste et ne peuvent pas être appelés.
 
-### Contrainte 1 — Compte de service dédié à l'écriture
+### Contrainte 1 — Compte utilisé pour l'écriture
 
-Les outils d'écriture utilisent un second compte de service **distinct** du compte de lecture :
+Les outils d'écriture utilisent le même compte que la lecture (`DOCMOST_EMAIL` / `DOCMOST_PASSWORD`). Ce compte doit avoir les droits **Writer** (ou **Admin**) sur les espaces concernés.
 
-| Variable | Usage |
-|---|---|
-| `DOCMOST_EMAIL` / `DOCMOST_PASSWORD` | Compte lecture seule |
-| `DOCMOST_WRITE_EMAIL` / `DOCMOST_WRITE_PASSWORD` | Compte écriture |
-
-Créer l'utilisateur `mcp-write@kansos.org` dans Docmost, l'ajouter aux espaces concernés avec le rôle **Writer** (ou **Admin** si nécessaire). Ne jamais réutiliser le compte de lecture pour l'écriture.
+Pour un déploiement multi-utilisateurs, remplacer par un compte de service dédié avec les droits appropriés.
 
 ### Contrainte 2 — Verrouillage optimiste sur `update_page`
 

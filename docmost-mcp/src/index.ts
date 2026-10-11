@@ -7,7 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { login, loginWrite } from './auth.js';
+import { login } from './auth.js';
 import {
   listSpaces,
   listSpacesSchema,
@@ -53,14 +53,6 @@ function assertEnv() {
     process.exit(1);
   }
 
-  if (WRITE_MODE) {
-    const writeMissing = ['DOCMOST_WRITE_EMAIL', 'DOCMOST_WRITE_PASSWORD'].filter((k) => !process.env[k]);
-    if (writeMissing.length > 0) {
-      console.error(`[docmost-mcp] Mode écriture activé mais variables manquantes : ${writeMissing.join(', ')}`);
-      console.error('[docmost-mcp] Créer un second compte de service dans Docmost et renseigner ces variables.');
-      process.exit(1);
-    }
-  }
 }
 
 // ─── Startup check ────────────────────────────────────────────────────────────
@@ -89,17 +81,6 @@ async function startupCheck() {
     process.exit(1);
   }
 
-  // 3. Authentification écriture (si activée)
-  if (WRITE_MODE) {
-    try {
-      await loginWrite();
-      process.stderr.write('[docmost-mcp] Authentifié (écriture) avec succès.\n');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[docmost-mcp] Échec d'authentification écriture : ${msg}\n`);
-      process.exit(1);
-    }
-  }
 }
 
 // ─── Tool registry ────────────────────────────────────────────────────────────
