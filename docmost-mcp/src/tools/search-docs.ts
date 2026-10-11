@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { fetchSearch } from '../client.js';
+import { fetchSearch, fetchSpaces } from '../client.js';
 
 export const searchDocsSchema = z.object({
   query: z.string().min(1).describe('Terme(s) à rechercher dans les pages Docmost'),
   space_slug: z
     .string()
     .optional()
-    .describe('Slug de l\'espace pour limiter la recherche (optionnel)'),
+    .describe('Slug de l\'espace pour limiter la recherche (ex: "doc", "epitech"). Utiliser list_spaces pour connaître les slugs disponibles.'),
   limit: z
     .number()
     .int()
@@ -18,13 +18,29 @@ export const searchDocsSchema = z.object({
 
 export const searchDocsDescription = `Recherche plein-texte dans les pages Docmost.
 Point d'entrée principal : utilise search_docs avant get_page sauf si tu as déjà un identifiant de page.
+Accepte un space_slug optionnel pour filtrer la recherche à un seul espace (utilise list_spaces pour les slugs).
 Retourne les titres, extraits et identifiants des pages correspondantes.`;
 
 export async function searchDocs(args: z.infer<typeof searchDocsSchema>) {
-  // space_slug → we need to resolve it to spaceId; since the search API takes spaceId (UUID)
-  // we pass space_slug as a hint in the query if no direct mapping is available.
-  // The API accepts spaceId (UUID), not slug — caller must use list_spaces first to get the UUID.
-  const result = await fetchSearch(args.query, undefined, args.limit);
+  let spaceId: string | undefined;
+
+  if (args.space_slug) {
+    const spaces = await fetchSpaces();
+    const match = spaces.items.find((s) => s.slug === args.space_slug);
+    if (!match) {
+      const available = spaces.items.map((s) => s.slug).join(', ');
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Espace "${args.space_slug}" introuvable. Espaces disponibles : ${available}`,
+        }],
+        isError: true,
+      };
+    }
+    spaceId = match.id;
+  }
+
+  const result = await fetchSearch(args.query, spaceId, args.limit);
 
   const items = result.items.map((item) => ({
     id: item.id,
@@ -36,8 +52,8 @@ export async function searchDocs(args: z.infer<typeof searchDocsSchema>) {
 
   const text =
     items.length === 0
-      ? `Aucun résultat pour la requête "${args.query}".`
-      : JSON.stringify({ query: args.query, total: items.length, results: items }, null, 2);
+      ? `Aucun résultat pour la requête "${args.query}"${args.space_slug ? ` dans l'espace "${args.space_slug}"` : ''}.`
+      : JSON.stringify({ query: args.query, space_slug: args.space_slug ?? null, total: items.length, results: items }, null, 2);
 
   return { content: [{ type: 'text' as const, text }] };
 }
